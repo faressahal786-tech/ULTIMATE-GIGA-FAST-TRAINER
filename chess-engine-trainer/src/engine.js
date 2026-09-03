@@ -531,6 +531,10 @@ function makeEngine() {
     evalCacheOn = true;
     var root = legalMoves(pos);
     if (!root.length) { evalCacheOn = false; return null; }
+    // Order root moves up front (MVV-LVA captures first + retained history):
+    // the depth-1 iteration previously searched raw generation order, giving
+    // PVS poor initial bounds and fewer cutoffs at every deeper iteration.
+    orderMoves(root, 0, 0);
     var best = root[0], bestScore = 0, done = 0;
     var t0 = Date.now();
 
