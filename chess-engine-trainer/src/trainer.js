@@ -116,7 +116,9 @@ function makeTrainer(engine) {
       if (plusScore === 1) { w++; } else if (plusScore === 0) { l++; } else { d++; }
     }
     var grad = (score / games - 0.5) * 2; // [-1, +1]: positive means plus-side better
-    for (var u = 0; u < n; u++) brain.theta[u] += ak * grad * delta[u] / (ck * ck > 0 ? 1 : 1);
+    // Proper SPSA: ghat = (y+ - y-) / (2*ck*Delta), Delta=+-1, then theta += ak*ghat*Delta
+    var scale = ak * grad / (2 * ck);
+    for (var u = 0; u < n; u++) brain.theta[u] += scale * delta[u];
     clipTheta(brain.theta);
     brain.gen++; brain.games += games;
     // credit wins to brain record from plus perspective is noisy; track raw
@@ -130,7 +132,7 @@ function makeTrainer(engine) {
   // Texel-style supervised tune on [{fen, result}] result in {1,0.5,0} from white perspective.
   function texelTune(thetaIn, dataset, opts) {
     opts = opts || {};
-    var lr = opts.lr != null ? opts.lr : 0.6, epochs = opts.epochs || 4, batch = opts.batch || 256;
+    var lr = opts.lr != null ? opts.lr : 0.6, epochs = opts.epochs || 4;
     var K = opts.K != null ? opts.K : 0.006;
     var rng = opts.rng || mulberry32(99);
     var th = thetaIn.slice();
@@ -138,28 +140,7 @@ function makeTrainer(engine) {
     for (var ep = 0; ep < epochs; ep++) {
       // shuffle
       for (var i = dataset.length - 1; i > 0; i--) { var j = (rng() * (i + 1)) | 0; var t = dataset[i]; dataset[i] = dataset[j]; dataset[j] = t; }
-      for (var b0 = 0; b0 < dataset.length; b0 += batch) {
-        var grad = new Float64Array(n), cnt = 0;
-        var end = Math.min(dataset.length, b0 + batch);
-        for (var k = b0; k < end; k++) {
-          var row = dataset[k];
-          var pos = engine.setFen(engine.newPos(), row.fen);
-          var wT = Float64Array.from(th);
-          var sc = engine.evaluate(pos, wT); // side-to-move!
-          var whiteScore = pos.turn === engine.WHITE ? sc : -sc;
-          var sig = 1 / (1 + Math.pow(10, -K * whiteScore));
-          var err = sig - row.result;
-          // numeric gradient via eval linearity is complex; use SPSA-style simultaneous approx per batch:
-          cnt++;
-          // accumulate simple scaled error into all params proportional to piece presence is too heavy;
-          // instead apply direct correction to material + tempo (fast, stable), full-batch SPSA covers the rest.
-          void grad;
-        }
-        void cnt;
-        // Stable closed-form-ish step: adjust tempo + material toward error using average eval sensitivity.
-        // (Full per-param backprop through eval is overkill here; SPSA handles high-dim search.)
-      }
-      // Practical approach: per-epoch SPSA-finite-difference on mini loss using a probe subset (fast in JS).
+      // Per-epoch SPSA finite-difference step on the logistic loss over a probe subset (fast in JS).
       var probe = dataset.slice(0, Math.min(400, dataset.length));
       function loss(tt) {
         var w = Float64Array.from(tt), sum = 0;
@@ -173,7 +154,6 @@ function makeTrainer(engine) {
         }
         return sum / probe.length;
       }
-      var base = loss(th);
       var dir = new Int8Array(n);
       for (var u = 0; u < n; u++) dir[u] = rng() < 0.5 ? -1 : 1;
       var step = 1.2 / (1 + ep);
@@ -184,7 +164,6 @@ function makeTrainer(engine) {
       var g = (lp - lm) / 2;
       for (var wI = 0; wI < n; wI++) th[wI] -= lr * g * dir[wI] * 0.05;
       clipTheta(th);
-      void base;
     }
     return th;
   }
@@ -194,10 +173,7 @@ function makeTrainer(engine) {
     var base = Array.from(engine.defaultTheta());
     var out = [];
     for (var g = 0; g < nGames; g++) {
-      var pos = engine.startPos();
-      var moves = [];
       var res = playGame(base, base, { depth: depth || 1, maxPlies: 100, openPlies: 8, rng: rng });
-      void moves;
       // record final result applied to a few quiet sample positions from a fresh random walk
       var p2 = engine.startPos();
       var seq = 6 + ((rng() * 10) | 0);
