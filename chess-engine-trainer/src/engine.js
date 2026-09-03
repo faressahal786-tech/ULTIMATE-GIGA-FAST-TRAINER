@@ -595,6 +595,15 @@ function makeEngine() {
         var rpc = ((rm >>> 16) & 15) - 7;
         if (rpc === 1 || rpc === -1 || pos.stack[rp].cap || pos.stack[rp].epcap) break;
       }
+      // mate distance pruning: fastest mate from here scores MATE-ply-1 and
+      // slowest being-mated scores -(MATE-ply); tighten the window to those
+      // theoretical bounds. No-op until a mate score enters the window.
+      if (ply > 0) {
+        var lo = ply - MATE, hi = MATE - ply - 1;
+        if (lo > alpha) alpha = lo;
+        if (hi < beta) beta = hi;
+        if (alpha >= beta) return alpha;
+      }
       var us = pos.turn, chk = inCheck(pos, us);
       if (chk) depth++;
       if (depth <= 0) return qs(alpha, beta, ply);
