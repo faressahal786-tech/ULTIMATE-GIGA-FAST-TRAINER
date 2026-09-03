@@ -577,6 +577,10 @@ function makeEngine() {
       if (maxNodes > 0 && nodes >= maxNodes) { aborted = true; return alpha; }
       if ((nodes & 1023) === 0 && Date.now() > deadline) { aborted = true; return alpha; }
       if (pos.half >= 100) return 0;
+      // 2-fold repetition (game history + search path) is a forced draw.
+      // Stack holds pre-move hashes; a match with pos.h means the same
+      // side-to-move position already occurred, so stop searching it as a win.
+      for (var rp = pos.stack.length - 1; rp >= 0; rp--) if (pos.stack[rp].h === pos.h) return 0;
       var us = pos.turn, chk = inCheck(pos, us);
       if (chk) depth++;
       if (depth <= 0) return qs(alpha, beta, ply);
