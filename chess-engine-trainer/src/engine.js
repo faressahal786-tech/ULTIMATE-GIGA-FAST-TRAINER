@@ -28,8 +28,18 @@ function makeEngine() {
   function onBoard(sq) { return !(sq & 136); }
 
   function newPos() {
-    return { b: new Int8Array(128), turn: WHITE, castling: 0, ep: -1, half: 0, full: 1, kw: 0, kb: 0, stack: [] };
+    return { b: new Int8Array(128), turn: WHITE, castling: 0, ep: -1, half: 0, full: 1, kw: 0, kb: 0, h: 0, stack: [] };
   }
+
+  // Incremental Zobrist hashing (maintained in doMove/undoMove; replaces per-node board scan).
+  var _z = 0x2545F491;
+  function zr() { _z ^= _z << 13; _z >>>= 0; _z ^= _z >>> 17; _z ^= _z << 5; _z >>>= 0; return _z | 0; }
+  var ZP = new Int32Array(14 * 128), ZC = new Int32Array(16), ZEP = new Int32Array(8);
+  for (var _zi = 0; _zi < ZP.length; _zi++) ZP[_zi] = zr();
+  for (var _zj = 0; _zj < 16; _zj++) ZC[_zj] = zr();
+  for (var _zk = 0; _zk < 8; _zk++) ZEP[_zk] = zr();
+  var ZSIDE = zr();
+  function zPiece(p, sq) { return ZP[(p + 7) * 128 + sq]; }
 
   var FILES = "abcdefgh";
   function sqName(sq) { return FILES[sq & 7] + (((sq >> 4) & 7) + 1); }
@@ -66,11 +76,19 @@ function makeEngine() {
     pos.ep = parts[3] && parts[3] !== "-" ? parseSq(parts[3]) : -1;
     pos.half = parts[4] !== undefined ? +parts[4] : 0;
     pos.full = parts[5] !== undefined ? +parts[5] : 1;
+    pos.h = 0;
+    for (var _hs = 0; _hs < 128; _hs++) {
+      if (_hs & 136) { _hs += 7; continue; }
+      var _hp = pos.b[_hs];
+      if (_hp) pos.h ^= zPiece(_hp, _hs);
+    }
+    pos.h ^= ZC[pos.castling];
+    if (pos.ep >= 0) pos.h ^= ZEP[pos.ep & 7];
+    if (pos.turn === BLACK) pos.h ^= ZSIDE;
     return pos;
   }
 
   function getFen(pos) {
-    var cmap = { "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "-1": "p", "-2": "n", "-3": "b", "-4": "r", "-5": "q", "-6": "k" };
     var rows = [];
     for (var i = 0; i < 8; i++) {
       var rank = 7 - i, row = "", empty = 0;
@@ -199,28 +217,41 @@ function makeEngine() {
     var f = mf(m), t = mt(m), fl = mfl(m);
     var pc = pos.b[f], cap = pos.b[t];
     var promo = mpr(m);
-    pos.stack.push({ m: m, cap: cap, castling: pos.castling, ep: pos.ep, half: pos.half, kw: pos.kw, kb: pos.kb, epcap: 0 });
+    pos.stack.push({ m: m, cap: cap, castling: pos.castling, ep: pos.ep, half: pos.half, kw: pos.kw, kb: pos.kb, epcap: 0, h: pos.h });
     var us = pos.turn;
+    var hh = pos.h ^ zPiece(pc, f);
+    if (cap) hh ^= zPiece(cap, t);
+    if (pos.ep >= 0) hh ^= ZEP[pos.ep & 7];
     pos.ep = -1;
     if (fl & F_EP) {
       var csq = t + (us === WHITE ? -16 : 16);
       pos.stack[pos.stack.length - 1].epcap = pos.b[csq];
+      hh ^= zPiece(pos.b[csq], csq);
       pos.b[csq] = 0;
     }
-    pos.b[t] = promo ? (us === WHITE ? promo : -promo) : pc;
+    var placed = promo ? (us === WHITE ? promo : -promo) : pc;
+    hh ^= zPiece(placed, t);
+    pos.b[t] = placed;
     pos.b[f] = 0;
     if (fl & F_CASTLE) {
+      var rf = t > f ? t + 1 : t - 2, rt = t > f ? t - 1 : t + 1;
+      hh ^= zPiece(pos.b[rf], rf) ^ zPiece(pos.b[rf], rt);
       if (t > f) { pos.b[t - 1] = pos.b[t + 1]; pos.b[t + 1] = 0; }
       else { pos.b[t + 1] = pos.b[t - 2]; pos.b[t - 2] = 0; }
     }
     var apt = pc > 0 ? pc : -pc;
     if (apt === 6) { if (us === WHITE) pos.kw = t; else pos.kb = t; }
+    var oldC = pos.castling;
     if (apt === 6) pos.castling &= us === WHITE ? ~3 : ~12;
     if (f === 0 || t === 0) pos.castling &= ~2;
     if (f === 7 || t === 7) pos.castling &= ~1;
     if (f === 112 || t === 112) pos.castling &= ~8;
     if (f === 119 || t === 119) pos.castling &= ~4;
+    if (oldC !== pos.castling) hh ^= ZC[oldC] ^ ZC[pos.castling];
     if (fl & F_DBL) pos.ep = f + (us === WHITE ? 16 : -16);
+    if (pos.ep >= 0) hh ^= ZEP[pos.ep & 7];
+    hh ^= ZSIDE;
+    pos.h = hh;
     pos.half = (apt === 1 || cap || pos.stack[pos.stack.length - 1].epcap) ? 0 : pos.half + 1;
     if (us === BLACK) pos.full++;
     pos.turn = -us;
@@ -239,7 +270,7 @@ function makeEngine() {
       if (t > f) { pos.b[t + 1] = pos.b[t - 1]; pos.b[t - 1] = 0; }
       else { pos.b[t - 2] = pos.b[t + 1]; pos.b[t + 1] = 0; }
     }
-    pos.castling = u.castling; pos.ep = u.ep; pos.half = u.half; pos.kw = u.kw; pos.kb = u.kb;
+    pos.castling = u.castling; pos.ep = u.ep; pos.half = u.half; pos.kw = u.kw; pos.kb = u.kb; pos.h = u.h;
   }
 
   function legalMoves(pos) {
@@ -400,16 +431,7 @@ function makeEngine() {
     return ms;
   }
 
-  function posHash(pos) {
-    var h = 0, b = pos.b;
-    for (var sq = 0; sq < 128; sq++) {
-      if (sq & 136) { sq += 7; continue; }
-      var p = b[sq];
-      if (p) h = (((h * 31) | 0) + ((p + 7) * 131 + sq * 17)) | 0;
-    }
-    h = (h + pos.turn * 7 + pos.castling * 131 + pos.ep) | 0;
-    return h;
-  }
+  function posHash(pos) { return pos.h; }
 
   function think(pos, th, opts) {
     opts = opts || {};
@@ -462,6 +484,17 @@ function makeEngine() {
         if (e.f === 2 && e.s >= beta) return e.s;
         if (e.f === 3 && e.s <= alpha) return e.s;
       }
+      // reverse futility: static eval far above beta -> fail soft without searching
+      var futile = false, standPrune = 0;
+      if (!chk && beta < MATE - 1000) {
+        if (depth === 2 || depth === 3) {
+          var re = evaluate(pos, th);
+          if (re - 135 * depth >= beta) return re;
+        } else if (depth === 1) {
+          standPrune = evaluate(pos, th);
+          futile = standPrune + 175 <= alpha;
+        }
+      }
       // null move
       if (!chk && depth >= 3 && beta < MATE - 1000) {
         var hasMajor = false;
@@ -473,12 +506,14 @@ function makeEngine() {
         }
         if (hasMajor) {
           var sv = pos.ep;
-          pos.stack.push({ m: 0, cap: 0, castling: pos.castling, ep: pos.ep, half: pos.half, kw: pos.kw, kb: pos.kb, epcap: 0, null: true });
+          pos.stack.push({ m: 0, cap: 0, castling: pos.castling, ep: pos.ep, half: pos.half, kw: pos.kw, kb: pos.kb, epcap: 0, h: pos.h, null: true });
+          if (sv >= 0) pos.h ^= ZEP[sv & 7];
+          pos.h ^= ZSIDE;
           pos.ep = -1; pos.turn = -us;
           var R = depth > 6 ? 3 : 2;
           var v = -negamax(depth - 1 - R, -beta, -beta + 1, ply + 1);
           var uu = pos.stack.pop();
-          pos.ep = uu.ep; pos.turn = us;
+          pos.ep = uu.ep; pos.turn = us; pos.h = uu.h;
           if (aborted) return alpha;
           if (v >= beta) return v;
         }
@@ -488,10 +523,13 @@ function makeEngine() {
       var legal = 0, bestV = -INF, bestM = 0, origA = alpha;
       for (var i = 0; i < ms.length; i++) {
         var m = ms[i];
+        var isTact = mc(m) !== 0 || mpr(m) !== 0 || (mfl(m) & F_EP) !== 0;
+        // futility: skip quiet moves once at least one legal move was searched
+        // (legal>0 guard preserves mate/stalemate detection)
+        if (futile && legal > 0 && !isTact && m !== ttM) continue;
         doMove(pos, m);
         if (inCheck(pos, us)) { undoMove(pos); continue; }
         legal++;
-        var isTact = mc(m) !== 0 || mpr(m) !== 0;
         var v2;
         if (i === 0 || depth < 3) v2 = -negamax(depth - 1, -beta, -alpha, ply + 1);
         else {
@@ -538,9 +576,9 @@ function makeEngine() {
         if (illegal) { undoMove(pos); scored.push({ m: rm, s: -INF }); continue; }
         if (ri === 0) val = -negamax(d - 1, -INF, INF, 1);
         else {
-          var guess = prev[ri].s;
-          val = -negamax(d - 1, -bestScore - window, -bestScore + window, 1);
-          if (val <= -bestScore - window || val >= -bestScore + window)
+          var guess = prev[ri].s; // this move's root score from the previous depth
+          val = -negamax(d - 1, -guess - window, -guess + window, 1);
+          if (val <= guess - window || val >= guess + window)
             val = -negamax(d - 1, -INF, INF, 1);
         }
         undoMove(pos);
