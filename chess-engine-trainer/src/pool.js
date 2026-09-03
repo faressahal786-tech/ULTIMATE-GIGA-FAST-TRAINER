@@ -16,6 +16,7 @@ function cpuCount() {
 
 function makePool(nThreads) {
   var n = nThreads == null ? cpuCount() : parseInt(nThreads, 10);
+  if (!n) n = cpuCount(); // 0 = all cores (documented train.js flag)
   if (!(n > 1) || !WT || typeof WT.Worker !== "function") return null;
   if (n > 64) n = 64;
   var workerPath = path.join(__dirname, "play-worker.js");

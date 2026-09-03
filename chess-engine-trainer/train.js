@@ -54,7 +54,7 @@ process.on("SIGINT", () => { console.log("\nstopping..."); stop = true; });
 
 async function main() {
   let pool = null;
-  if (threads > 1) {
+  if (threads === 0 || threads > 1) {
     const { makePool } = require(path.join(__dirname, "src", "pool.js"));
     pool = makePool(threads);
     if (!pool) console.log("worker_threads unavailable - falling back to single thread");
