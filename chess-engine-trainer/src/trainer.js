@@ -22,6 +22,37 @@ function makeTrainer(engine) {
   }
   function cloneTheta(th) { return th.slice(); }
 
+  // Compact opening book (coordinate moves, white-first) for self-play variety.
+  // Uniform-random opening plies transpose into the same quiet symmetric lines
+  // that weak bullet search then repeats into draws; a book of real first
+  // moves spreads games across pawn structures with more decisive results.
+  var BOOK = [
+    ["e2e4", "e7e5", "g1f3", "b8c6", "f1b5", "a7a6", "b5a4", "g8f6"],
+    ["e2e4", "e7e5", "g1f3", "b8c6", "d2d4", "e5d4", "f3d4", "g8f6"],
+    ["e2e4", "c7c5", "g1f3", "d7d6", "d2d4", "c5d4", "f3d4", "g8f6"],
+    ["e2e4", "e7e6", "d2d4", "d7d5", "b1c3", "g8f6", "e4e5", "f6d7"],
+    ["e2e4", "c7c6", "d2d4", "d7d5", "b1c3", "d5e4", "c3e4", "b8d7"],
+    ["e2e4", "d7d5", "e4d5", "d8d5", "b1c3", "d5a5", "d2d4", "g8f6"],
+    ["e2e4", "d7d6", "d2d4", "g8f6", "b1c3", "g7g6", "f1e2", "f8g7"],
+    ["d2d4", "d7d5", "c2c4", "e7e6", "b1c3", "g8f6", "c1g5", "f8e7"],
+    ["d2d4", "d7d5", "c2c4", "c7c6", "g1f3", "g8f6", "b1c3", "d5c4"],
+    ["d2d4", "g8f6", "c2c4", "e7e6", "b1c3", "f8b4", "e2e3", "e8g8"],
+    ["d2d4", "g8f6", "c2c4", "g7g6", "b1c3", "f8g7", "e2e4", "d7d6"],
+    ["d2d4", "f7f5", "g2g3", "g8f6", "f1g2", "e7e6", "c2c4", "d7d5"],
+    ["c2c4", "e7e5", "b1c3", "g8f6", "g1f3", "b8c6", "g2g3", "d7d5"],
+    ["g1f3", "d7d5", "g2g3", "g8f6", "f1g2", "e7e6", "e8g8", "c7c5"],
+    ["e2e4", "e7e5", "f1c4", "g8f6", "d2d3", "f8c5", "c2c3", "e8g8"],
+    ["d2d4", "d7d6", "e2e4", "g8f6", "b1c3", "e7e5", "g1f3", "b8c6"]
+  ];
+
+  function bookMove(moves, want) {
+    for (var i = 0; i < moves.length; i++) {
+      var m = moves[i];
+      if (engine.sqName(engine.mf(m)) + engine.sqName(engine.mt(m)) === want) return m;
+    }
+    return 0;
+  }
+
   function clipTheta(th) {
     for (var i = 0; i < 5; i++) th[i] = Math.max(20, Math.min(1500, th[i]));
     for (var j = 5; j < 453; j++) th[j] = Math.max(-160, Math.min(160, th[j]));
@@ -57,6 +88,7 @@ function makeTrainer(engine) {
     var pos = engine.startPos();
     var seen = {}, rep = 0;
     var plies = 0;
+    var line = BOOK[(rng() * BOOK.length) | 0];
     var wT = Float64Array.from(whiteTh), bT = Float64Array.from(blackTh);
     while (true) {
       var moves = engine.legalMoves(pos);
@@ -77,7 +109,10 @@ function makeTrainer(engine) {
         return { result: whiteAhead ? "w" : "b", plies: plies, reason: "adjudicated" };
       }
       var mv;
-      if (plies < openPlies) mv = moves[(rng() * moves.length) | 0];
+      if (plies < openPlies) {
+        mv = (plies < line.length) ? bookMove(moves, line[plies]) : 0;
+        if (!mv) mv = moves[(rng() * moves.length) | 0];
+      }
       else {
         var th = pos.turn === engine.WHITE ? wT : bT;
         var r = engine.think(pos, th, { depth: depth });
@@ -274,7 +309,7 @@ function makeTrainer(engine) {
     return b;
   }
 
-  return { mulberry32: mulberry32, randn: randn, newBrain: newBrain, cloneTheta: cloneTheta, clipTheta: clipTheta, playGame: playGame, spsaIter: spsaIter, spsaIterParallel: spsaIterParallel, texelTune: texelTune, buildDataset: buildDataset, eloDiff: eloDiff, sprtLLR: sprtLLR, saveBrain: saveBrain, loadBrain: loadBrain };
+  return { mulberry32: mulberry32, randn: randn, newBrain: newBrain, cloneTheta: cloneTheta, clipTheta: clipTheta, playGame: playGame, spsaIter: spsaIter, spsaIterParallel: spsaIterParallel, texelTune: texelTune, buildDataset: buildDataset, eloDiff: eloDiff, sprtLLR: sprtLLR, saveBrain: saveBrain, loadBrain: loadBrain, BOOK: BOOK };
 }
 
 if (typeof module !== "undefined" && module.exports) module.exports = { makeTrainer: makeTrainer };
