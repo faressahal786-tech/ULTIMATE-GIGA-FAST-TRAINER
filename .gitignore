@@ -3,7 +3,6 @@ __pycache__/
 *.pyc
 brains/*.json
 brains/*.tmp
-chess-trainer/brains/
 chess-trainer-py/
 cities-skylines1-agent-skill/
 *.log
