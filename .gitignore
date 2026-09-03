@@ -7,7 +7,6 @@ chess-trainer/brains/
 chess-trainer-py/
 cities-skylines1-agent-skill/
 *.log
-autoloop.log
 STOPLOOP
 .DS_Store
 Thumbs.db
