@@ -580,7 +580,17 @@ function makeEngine() {
       // 2-fold repetition (game history + search path) is a forced draw.
       // Stack holds pre-move hashes; a match with pos.h means the same
       // side-to-move position already occurred, so stop searching it as a win.
-      for (var rp = pos.stack.length - 1; rp >= 0; rp--) if (pos.stack[rp].h === pos.h) return 0;
+      // Stop the scan at the last pawn move/capture: those change the pawn
+      // structure/material irreversibly, so older hashes cannot match (null
+      // moves change nothing and are skipped over). Cuts the per-node scan
+      // from the full game length to a few plies with identical results.
+      for (var rp = pos.stack.length - 1; rp >= 0; rp--) {
+        if (pos.stack[rp].h === pos.h) return 0;
+        var rm = pos.stack[rp].m;
+        if (!rm) continue;
+        var rpc = ((rm >>> 16) & 15) - 7;
+        if (rpc === 1 || rpc === -1 || pos.stack[rp].cap || pos.stack[rp].epcap) break;
+      }
       var us = pos.turn, chk = inCheck(pos, us);
       if (chk) depth++;
       if (depth <= 0) return qs(alpha, beta, ply);
