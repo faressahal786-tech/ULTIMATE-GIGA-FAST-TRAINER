@@ -579,9 +579,12 @@ function makeEngine() {
       var h = posHash(pos), e = TT.get(h), ttM = 0;
       if (e && e.g === TT_GEN && e.d >= depth) {
         ttM = e.m;
-        if (e.f === 1) return e.s;
-        if (e.f === 2 && e.s >= beta) return e.s;
-        if (e.f === 3 && e.s <= alpha) return e.s;
+        var ttS = e.s;
+        if (ttS > MATE - 1000) ttS -= ply;
+        else if (ttS < -MATE + 1000) ttS += ply;
+        if (e.f === 1) return ttS;
+        if (e.f === 2 && ttS >= beta) return ttS;
+        if (e.f === 3 && ttS <= alpha) return ttS;
       }
       // reverse futility: static eval far above beta -> fail soft without searching
       var futile = false, standPrune = 0;
@@ -649,7 +652,10 @@ function makeEngine() {
       if (!legal) return chk ? -(MATE - ply) : 0;
       var fl = bestV <= origA ? 3 : bestV >= beta ? 2 : 1;
       if (TT.size > 400000) TT.clear();
-      TT.set(h, { s: bestV, d: depth, f: fl, m: bestM, g: TT_GEN });
+      var ttStore = bestV;
+      if (ttStore > MATE - 1000) ttStore += ply;
+      else if (ttStore < -MATE + 1000) ttStore -= ply;
+      TT.set(h, { s: ttStore, d: depth, f: fl, m: bestM, g: TT_GEN });
       return bestV;
     }
 
