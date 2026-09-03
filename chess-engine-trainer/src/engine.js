@@ -339,14 +339,15 @@ function makeEngine() {
   }
 
   // Scratch pawn-file buffers reused per evaluate (single-threaded search has
-  // no reentrancy here). Avoids 4 Array allocs per node at high nps.
+  // no reentrancy here). Avoids 6 Array allocs per node at high nps.
   var SCR_WP = new Int16Array(8), SCR_BP = new Int16Array(8);
   var SCR_WB = new Int8Array(8), SCR_BB = new Int8Array(8);
+  var SCR_WW = new Int8Array(8), SCR_BW = new Int8Array(8);
   function rawEvaluate(pos, th) {
     var mg = 0, eg = 0, phase = 0;
     var b = pos.b;
-    var wPawns = SCR_WP, bPawns = SCR_BP, wBest = SCR_WB, bBest = SCR_BB;
-    wPawns.fill(0); bPawns.fill(0); wBest.fill(-1); bBest.fill(8);
+    var wPawns = SCR_WP, bPawns = SCR_BP, wBest = SCR_WB, bBest = SCR_BB, wWorst = SCR_WW, bWorst = SCR_BW;
+    wPawns.fill(0); bPawns.fill(0); wBest.fill(-1); bBest.fill(8); wWorst.fill(8); bWorst.fill(-1);
     var wB = 0, bB = 0, mob = 0;
     var wRP = 0, bRP = 0;
     for (var sq = 0; sq < 128; sq++) {
@@ -357,8 +358,8 @@ function makeEngine() {
       var idx = pstIdx(sq, w);
       if (at === 1) {
         var v = th[0] + th[5 + idx];
-        if (w) { mg += v; eg += v; wPawns[sq & 7]++; var r = sq >> 4; if (r > wBest[sq & 7]) wBest[sq & 7] = r; }
-        else { mg -= v; eg -= v; bPawns[sq & 7]++; var r2 = sq >> 4; if (r2 < bBest[sq & 7]) bBest[sq & 7] = r2; }
+        if (w) { mg += v; eg += v; wPawns[sq & 7]++; var r = sq >> 4; if (r > wBest[sq & 7]) wBest[sq & 7] = r; if (r < wWorst[sq & 7]) wWorst[sq & 7] = r; }
+        else { mg -= v; eg -= v; bPawns[sq & 7]++; var r2 = sq >> 4; if (r2 < bBest[sq & 7]) bBest[sq & 7] = r2; if (r2 > bWorst[sq & 7]) bWorst[sq & 7] = r2; }
       } else if (at === 2) {
         var s2 = th[1] + th[69 + idx];
         if (w) { mg += s2; eg += s2; } else { mg -= s2; eg -= s2; }
@@ -433,11 +434,11 @@ function makeEngine() {
       var bl = f > 0 ? bPawns[f - 1] : 0, br = f < 7 ? bPawns[f + 1] : 0;
       if (wPawns[f] && !wl && !wr) { mg -= iso * wPawns[f]; eg -= iso * wPawns[f]; }
       if (bPawns[f] && !bl && !br) { mg += iso * bPawns[f]; eg += iso * bPawns[f]; }
-      if (wBest[f] >= 0 && bBest[f] > wBest[f] && (f === 0 || bBest[f - 1] > wBest[f]) && (f === 7 || bBest[f + 1] > wBest[f])) {
+      if (wBest[f] >= 0 && wBest[f] > bWorst[f] && (f === 0 || wBest[f] > bWorst[f - 1]) && (f === 7 || wBest[f] > bWorst[f + 1])) {
         var pb = pass * (0.25 + 0.22 * wBest[f]);
         mg += pb; eg += pb * 1.6;
       }
-      if (bBest[f] <= 7 && wBest[f] < bBest[f] && (f === 0 || wBest[f - 1] < bBest[f]) && (f === 7 || wBest[f + 1] < bBest[f])) {
+      if (bBest[f] <= 7 && bBest[f] < wWorst[f] && (f === 0 || bBest[f] < wWorst[f - 1]) && (f === 7 || bBest[f] < wWorst[f + 1])) {
         var pb2 = pass * (0.25 + 0.22 * (7 - bBest[f]));
         mg -= pb2; eg -= pb2 * 1.6;
       }
