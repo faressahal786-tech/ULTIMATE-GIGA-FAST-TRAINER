@@ -465,8 +465,11 @@ function makeEngine() {
     var wDanger = attacked(pos, wk, BLACK) ? 1 : 0, bDanger = attacked(pos, bk, WHITE) ? 1 : 0;
     mg += (bDanger - wDanger) * kZone;
     if (phase > 24) phase = 24;
-    var score = (mg * phase + eg * (24 - phase)) / 24 + tempo;
-    return pos.turn === WHITE ? score : -score;
+    var score = (mg * phase + eg * (24 - phase)) / 24;
+    // tempo is a side-to-move bonus: add after the side flip so both colors
+    // get +tempo. Adding before flipped it into a white-only bonus (black to
+    // move was penalized by tempo instead of rewarded).
+    return (pos.turn === WHITE ? score : -score) + tempo;
   }
 
   // ---- search ----
