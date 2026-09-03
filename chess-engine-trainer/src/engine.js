@@ -317,6 +317,18 @@ function makeEngine() {
   }
 
   function evaluate(pos, th) {
+    if (evalCacheOn) {
+      var h = pos.h, hit = evalCache.get(h);
+      if (hit !== undefined) return hit;
+      var v = rawEvaluate(pos, th);
+      if (evalCache.size > 400000) evalCache.clear();
+      evalCache.set(h, v);
+      return v;
+    }
+    return rawEvaluate(pos, th);
+  }
+
+  function rawEvaluate(pos, th) {
     var mg = 0, eg = 0, phase = 0;
     var b = pos.b;
     var wPawns = [0, 0, 0, 0, 0, 0, 0, 0], bPawns = [0, 0, 0, 0, 0, 0, 0, 0];
@@ -405,6 +417,11 @@ function makeEngine() {
   // ---- search ----
   var TT = new Map();
   var TT_GEN = 0;
+  // eval cache: exact board-scan results keyed on incremental zobrist pos.h.
+  // Scoped to a single think() (one theta); bypassed otherwise so supervised
+  // tuning / adjudication with varying thetas never reads stale entries.
+  var evalCache = new Map();
+  var evalCacheOn = false;
   var killers = new Int32Array(256);
   var history = new Int32Array(16 * 128);
   var PIECE_W = [0, 100, 320, 330, 500, 900, 20000];
@@ -440,8 +457,10 @@ function makeEngine() {
     var nodes = 0, aborted = false;
     TT_GEN++;
     killers.fill(0);
+    evalCache.clear();
+    evalCacheOn = true;
     var root = legalMoves(pos);
-    if (!root.length) return null;
+    if (!root.length) { evalCacheOn = false; return null; }
     var best = root[0], bestScore = 0, done = 0;
     var t0 = Date.now();
 
@@ -592,6 +611,7 @@ function makeEngine() {
       if (Math.abs(bestScore) > MATE - 200) break;
       if (Date.now() > deadline) break;
     }
+    evalCacheOn = false;
     return { move: best, score: bestScore, depth: done, nodes: nodes, ms: Date.now() - t0 };
   }
 
