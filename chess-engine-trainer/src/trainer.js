@@ -187,6 +187,7 @@ function makeTrainer(engine) {
     var rng = opts.rng || mulberry32(99);
     var th = thetaIn.slice();
     var n = engine.N_PARAMS;
+    if (!dataset || dataset.length === 0) return th;
     for (var ep = 0; ep < epochs; ep++) {
       // shuffle
       for (var i = dataset.length - 1; i > 0; i--) { var j = (rng() * (i + 1)) | 0; var t = dataset[i]; dataset[i] = dataset[j]; dataset[j] = t; }
@@ -211,7 +212,12 @@ function makeTrainer(engine) {
       for (var v = 0; v < n; v++) { tp[v] += step * dir[v]; tm[v] -= step * dir[v]; }
       clipTheta(tp); clipTheta(tm);
       var lp = loss(tp), lm = loss(tm);
+      if (!isFinite(lp) || !isFinite(lm)) continue;
       var g = (lp - lm) / 2;
+      // Small probe => high loss variance (SE ~ 1/sqrt(m)) => cap the shared
+      // gradient so one noisy finite-difference cannot random-walk all params.
+      var cap = 0.5 * Math.min(1, Math.sqrt(probe.length / 100));
+      if (g > cap) g = cap; else if (g < -cap) g = -cap;
       for (var wI = 0; wI < n; wI++) th[wI] -= lr * g * dir[wI] * 0.05;
       clipTheta(th);
     }
