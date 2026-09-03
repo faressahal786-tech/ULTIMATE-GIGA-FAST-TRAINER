@@ -25,10 +25,12 @@ while ($true) {
   $wait = $RateWaitSecs
   $failed = $false
   while ($true) {
-    $raw = & opencode @runArgs 2>&1
+    Write-Output "round $round: starting opencode at $(Get-Date -Format HH:mm:ss)"
+    $roundOut = @()
+    & opencode @runArgs 2>&1 | Tee-Object -Variable roundOut
     $code = $LASTEXITCODE
-    $text = $raw | Out-String
-    Write-Output $text
+    $text = $roundOut | Out-String
+    Write-Output "round $round: opencode exited with code $code"
     $limited = ($code -ne 0) -and ($text -match "(?i)429|rate.?limit|quota|too many requests|overloaded|try again|retry-after|capacity")
     if ($limited -and $attempt -lt $MaxRateRetries) {
       $attempt++
