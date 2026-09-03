@@ -518,6 +518,10 @@ function makeEngine() {
     var deadline = timeMs > 0 ? Date.now() + timeMs : Infinity;
     var nodes = 0, aborted = false;
     TT_GEN++;
+    // TT hits require e.g===TT_GEN, so prior thinks are dead weight that only
+    // slow Map lookups until the 400k bulk clear; drop them up front (evalCache
+    // already clears per think for the same single-theta scoping reason).
+    TT.clear();
     killers.fill(0);
     evalCache.clear();
     evalCacheOn = true;
