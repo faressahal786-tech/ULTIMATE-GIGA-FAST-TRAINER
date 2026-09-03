@@ -24,3 +24,5 @@ Brains save to `brains/brain-v2.json` (`gen`, `games`, `theta[463]`). Ctrl+C sto
 - Single mirrored PST set (white-relative) halves params and generalizes better.
 - Aspiration + delta-pruned quiescence + insertion-sort ordering = higher nps.
 - Short bullet games (depth 1–2, 6 random opening plies, adjudication) = hundreds of games/min per core.
+
+Loop status: smoke test OK (2026-09-03) — self-loop running.
