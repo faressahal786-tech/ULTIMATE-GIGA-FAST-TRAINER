@@ -28,7 +28,7 @@ function makeEngine() {
   function onBoard(sq) { return !(sq & 136); }
 
   function newPos() {
-    return { b: new Int8Array(128), turn: WHITE, castling: 0, ep: -1, half: 0, full: 1, kw: 0, kb: 0, h: 0, stack: [] };
+    return { b: new Int8Array(128), turn: WHITE, castling: 0, ep: -1, half: 0, full: 1, kw: 0, kb: 0, h: 0, mw: 0, mb: 0, stack: [] };
   }
 
   // Incremental Zobrist hashing (maintained in doMove/undoMove; replaces per-node board scan).
@@ -77,10 +77,15 @@ function makeEngine() {
     pos.half = parts[4] !== undefined ? +parts[4] : 0;
     pos.full = parts[5] !== undefined ? +parts[5] : 1;
     pos.h = 0;
+    pos.mw = 0; pos.mb = 0;
     for (var _hs = 0; _hs < 128; _hs++) {
       if (_hs & 136) { _hs += 7; continue; }
       var _hp = pos.b[_hs];
-      if (_hp) pos.h ^= zPiece(_hp, _hs);
+      if (_hp) {
+        pos.h ^= zPiece(_hp, _hs);
+        var _ha = _hp > 0 ? _hp : -_hp;
+        if (_ha >= 2 && _ha <= 5) { if (_hp > 0) pos.mw++; else pos.mb++; }
+      }
     }
     pos.h ^= ZC[pos.castling];
     if (pos.ep >= 0) pos.h ^= ZEP[pos.ep & 7];
@@ -217,10 +222,14 @@ function makeEngine() {
     var f = mf(m), t = mt(m), fl = mfl(m);
     var pc = pos.b[f], cap = pos.b[t];
     var promo = mpr(m);
-    pos.stack.push({ m: m, cap: cap, castling: pos.castling, ep: pos.ep, half: pos.half, kw: pos.kw, kb: pos.kb, epcap: 0, h: pos.h });
+    pos.stack.push({ m: m, cap: cap, castling: pos.castling, ep: pos.ep, half: pos.half, kw: pos.kw, kb: pos.kb, epcap: 0, h: pos.h, mw: pos.mw, mb: pos.mb });
     var us = pos.turn;
     var hh = pos.h ^ zPiece(pc, f);
-    if (cap) hh ^= zPiece(cap, t);
+    if (cap) {
+      hh ^= zPiece(cap, t);
+      var ca = cap > 0 ? cap : -cap;
+      if (ca >= 2 && ca <= 5) { if (cap > 0) pos.mw--; else pos.mb--; }
+    }
     if (pos.ep >= 0) hh ^= ZEP[pos.ep & 7];
     pos.ep = -1;
     if (fl & F_EP) {
@@ -230,6 +239,7 @@ function makeEngine() {
       pos.b[csq] = 0;
     }
     var placed = promo ? (us === WHITE ? promo : -promo) : pc;
+    if (promo) { if (us === WHITE) pos.mw++; else pos.mb++; }
     hh ^= zPiece(placed, t);
     pos.b[t] = placed;
     pos.b[f] = 0;
@@ -270,7 +280,7 @@ function makeEngine() {
       if (t > f) { pos.b[t + 1] = pos.b[t - 1]; pos.b[t - 1] = 0; }
       else { pos.b[t - 2] = pos.b[t + 1]; pos.b[t + 1] = 0; }
     }
-    pos.castling = u.castling; pos.ep = u.ep; pos.half = u.half; pos.kw = u.kw; pos.kb = u.kb; pos.h = u.h;
+    pos.castling = u.castling; pos.ep = u.ep; pos.half = u.half; pos.kw = u.kw; pos.kb = u.kb; pos.h = u.h; pos.mw = u.mw; pos.mb = u.mb;
   }
 
   function legalMoves(pos) {
@@ -580,15 +590,9 @@ function makeEngine() {
           futile = standPrune + 175 <= alpha;
         }
       }
-      // null move
+      // null move (major-piece guard is an incremental counter, not a board scan)
       if (!chk && depth >= 3 && beta < MATE - 1000) {
-        var hasMajor = false;
-        var bb = pos.b;
-        for (var s = 0; s < 128; s += 1) {
-          if (s & 136) { s += 7; continue; }
-          var pp = bb[s];
-          if (pp && (pp > 0 ? WHITE : BLACK) === us) { var aa = pp > 0 ? pp : -pp; if (aa !== 1 && aa !== 6) { hasMajor = true; break; } }
-        }
+        var hasMajor = (us === WHITE ? pos.mw : pos.mb) > 0;
         if (hasMajor) {
           var sv = pos.ep;
           pos.stack.push({ m: 0, cap: 0, castling: pos.castling, ep: pos.ep, half: pos.half, kw: pos.kw, kb: pos.kb, epcap: 0, h: pos.h, null: true });
