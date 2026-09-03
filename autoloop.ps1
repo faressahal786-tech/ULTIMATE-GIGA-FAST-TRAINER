@@ -1,6 +1,7 @@
 param(
   [int]$Rounds = 0,
-  [string]$Model = ""
+  [string]$Model = "opencode/muse-spark-1.3-contributor-free",
+  [string]$Variant = "xhigh"
 )
 # AUTO-LOOP: selfloop.py prompts opencode, opencode works, loop prompts again.
 # Usage: .\autoloop.ps1 -Rounds 3
@@ -16,8 +17,7 @@ while ($true) {
   if ($prompt -match "LOOP COMPLETE") { Write-Output $prompt; break }
   $round++
   Write-Output "=== AUTO-LOOP ROUND $round ==="
-  $runArgs = @("run", "--dir", $root, "--auto", $prompt)
-  if ($Model -ne "") { $runArgs += @("-m", $Model) }
+  $runArgs = @("run", "--dir", $root, "--auto", "-m", $Model, "--variant", $Variant, $prompt)
   & opencode @runArgs
   if ($LASTEXITCODE -ne 0) { Write-Output "opencode exited $LASTEXITCODE - stopping loop"; break }
   if (Test-Path (Join-Path $root "STOPLOOP")) { Write-Output "STOPLOOP file found - stopping"; break }
