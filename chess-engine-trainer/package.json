@@ -1,0 +1,11 @@
+{
+  "name": "chess-engine-trainer",
+  "version": "2.0.0",
+  "description": "Fast Stockfish-style chess engine trainer: SPSA + Texel tuning, stronger search, parallel self-play",
+  "type": "commonjs",
+  "scripts": {
+    "test": "bun test.js",
+    "train": "bun train.js --minutes 5",
+    "bench": "bun bench.js"
+  }
+}
