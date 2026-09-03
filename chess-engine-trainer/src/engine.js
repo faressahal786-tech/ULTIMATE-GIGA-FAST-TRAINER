@@ -509,6 +509,26 @@ function makeEngine() {
       nodes++;
       if (maxNodes > 0 && nodes >= maxNodes) { aborted = true; return alpha; }
       if ((nodes & 1023) === 0 && Date.now() > deadline) { aborted = true; return alpha; }
+      var us0 = pos.turn, chk = inCheck(pos, us0);
+      if (chk) {
+        if (ply > 64) return evaluate(pos, th);
+        var evas = genMoves(pos, false);
+        orderMoves(evas, 0, Math.min(ply, 120));
+        var legal = 0;
+        for (var j = 0; j < evas.length; j++) {
+          var em = evas[j];
+          doMove(pos, em);
+          if (inCheck(pos, us0)) { undoMove(pos); continue; }
+          legal++;
+          var ev = -qs(-beta, -alpha, ply + 1);
+          undoMove(pos);
+          if (aborted) return alpha;
+          if (ev >= beta) return ev;
+          if (ev > alpha) alpha = ev;
+        }
+        if (!legal) return -(MATE - ply);
+        return alpha;
+      }
       var stand = evaluate(pos, th);
       if (stand >= beta) return stand;
       if (stand > alpha) alpha = stand;
