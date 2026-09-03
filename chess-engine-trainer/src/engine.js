@@ -334,6 +334,7 @@ function makeEngine() {
     var wPawns = [0, 0, 0, 0, 0, 0, 0, 0], bPawns = [0, 0, 0, 0, 0, 0, 0, 0];
     var wBest = [-1, -1, -1, -1, -1, -1, -1, -1], bBest = [8, 8, 8, 8, 8, 8, 8, 8];
     var wB = 0, bB = 0, mob = 0;
+    var wRP = 0, bRP = 0;
     for (var sq = 0; sq < 128; sq++) {
       if (sq & 136) { sq += 7; continue; }
       var p = b[sq];
@@ -376,6 +377,7 @@ function makeEngine() {
         var s4 = th[3] + th[197 + idx];
         if (w) { mg += s4; eg += s4; } else { mg -= s4; eg -= s4; }
         phase += 2;
+        if (w) wRP += 1 << ((sq & 7) * 4); else bRP += 1 << ((sq & 7) * 4);
         var mr = 0;
         for (var mri = 0; mri < 4; mri++) {
           var mrd = R_DIR[mri], mrt = sq + mrd;
@@ -426,20 +428,12 @@ function makeEngine() {
         mg -= pb2; eg -= pb2 * 1.6;
       }
     }
-    // rook on open file + mobility + pawn shield
+    // rook on open file from packed per-file counts (no second board scan)
     var shieldW = 0, shieldB = 0;
-    for (var sq2 = 0; sq2 < 128; sq2++) {
-      if (sq2 & 136) { sq2 += 7; continue; }
-      var p2 = b[sq2];
-      if (!p2) continue;
-      var a2 = p2 > 0 ? p2 : -p2;
-      if (a2 === 4) {
-        var fl2 = sq2 & 7;
-        if ((p2 > 0 ? wPawns[fl2] : bPawns[fl2]) === 0) {
-          var open = (p2 > 0 ? bPawns[fl2] : wPawns[fl2]) === 0 ? rO : rH;
-          if (p2 > 0) { mg += open; eg += open; } else { mg -= open; eg -= open; }
-        }
-      }
+    for (var rf = 0; rf < 8; rf++) {
+      var wc = (wRP >>> (rf * 4)) & 15, bc = (bRP >>> (rf * 4)) & 15;
+      if (wc && !wPawns[rf]) { var wo = !bPawns[rf] ? rO : rH; mg += wo * wc; eg += wo * wc; }
+      if (bc && !bPawns[rf]) { var bo = !wPawns[rf] ? rO : rH; mg -= bo * bc; eg -= bo * bc; }
     }
     var wk = pos.kw, bk = pos.kb;
     var wf = wk & 7, wr2 = wk >> 4, bf = bk & 7, br2 = bk >> 4;
