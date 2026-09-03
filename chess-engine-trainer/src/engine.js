@@ -579,12 +579,11 @@ function makeEngine() {
       return bestV;
     }
 
-    // iterative deepening with aspiration
+    // iterative deepening with root PVS: full window first move, null-window + re-search rest
     var prev = root.map(function (m) { return { m: m, s: 0 }; });
     for (var d = 1; d <= maxDepth; d++) {
       prev.sort(function (a, b) { return b.s - a.s; });
-      var scored = [], alpha = -INF, lb = null, lv = -INF;
-      var window = d >= 4 ? 28 : INF;
+      var scored = [], alpha = -INF, lb = null, lv = -INF, first = true;
       for (var ri = 0; ri < prev.length; ri++) {
         var rm = prev[ri].m;
         doMove(pos, rm);
@@ -593,15 +592,14 @@ function makeEngine() {
         var illegal = inCheck(pos, us2);
         var val;
         if (illegal) { undoMove(pos); scored.push({ m: rm, s: -INF }); continue; }
-        if (ri === 0) val = -negamax(d - 1, -INF, INF, 1);
+        if (first) val = -negamax(d - 1, -INF, INF, 1);
         else {
-          var guess = prev[ri].s; // this move's root score from the previous depth
-          val = -negamax(d - 1, -guess - window, -guess + window, 1);
-          if (val <= guess - window || val >= guess + window)
-            val = -negamax(d - 1, -INF, INF, 1);
+          val = -negamax(d - 1, -alpha - 1, -alpha, 1);
+          if (!aborted && val > alpha) val = -negamax(d - 1, -INF, -alpha, 1);
         }
         undoMove(pos);
         if (aborted) break;
+        first = false;
         scored.push({ m: rm, s: val });
         if (val > lv) { lv = val; lb = rm; }
         if (val > alpha) alpha = val;
