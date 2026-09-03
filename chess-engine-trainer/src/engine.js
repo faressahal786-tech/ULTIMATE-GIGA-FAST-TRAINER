@@ -523,6 +523,10 @@ function makeEngine() {
     // already clears per think for the same single-theta scoping reason).
     TT.clear();
     killers.fill(0);
+    // Age history across thinks: beta-cutoff bonuses accumulate without bound
+    // (Int32 wrap + stale ordering over thousands of training games). Halving
+    // per think bounds entries while keeping recent move ordering.
+    for (var _hh = 0; _hh < history.length; _hh++) history[_hh] >>= 1;
     evalCache.clear();
     evalCacheOn = true;
     var root = legalMoves(pos);
