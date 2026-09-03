@@ -338,11 +338,15 @@ function makeEngine() {
     return rawEvaluate(pos, th);
   }
 
+  // Scratch pawn-file buffers reused per evaluate (single-threaded search has
+  // no reentrancy here). Avoids 4 Array allocs per node at high nps.
+  var SCR_WP = new Int16Array(8), SCR_BP = new Int16Array(8);
+  var SCR_WB = new Int8Array(8), SCR_BB = new Int8Array(8);
   function rawEvaluate(pos, th) {
     var mg = 0, eg = 0, phase = 0;
     var b = pos.b;
-    var wPawns = [0, 0, 0, 0, 0, 0, 0, 0], bPawns = [0, 0, 0, 0, 0, 0, 0, 0];
-    var wBest = [-1, -1, -1, -1, -1, -1, -1, -1], bBest = [8, 8, 8, 8, 8, 8, 8, 8];
+    var wPawns = SCR_WP, bPawns = SCR_BP, wBest = SCR_WB, bBest = SCR_BB;
+    wPawns.fill(0); bPawns.fill(0); wBest.fill(-1); bBest.fill(8);
     var wB = 0, bB = 0, mob = 0;
     var wRP = 0, bRP = 0;
     for (var sq = 0; sq < 128; sq++) {
