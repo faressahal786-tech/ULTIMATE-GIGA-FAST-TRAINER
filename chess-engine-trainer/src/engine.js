@@ -347,19 +347,61 @@ function makeEngine() {
       } else if (at === 2) {
         var s2 = th[1] + th[69 + idx];
         if (w) { mg += s2; eg += s2; } else { mg -= s2; eg -= s2; }
-        phase += 1; mob += w ? 1 : -1;
+        phase += 1;
+        var mn = 0;
+        for (var mi = 0; mi < 8; mi++) {
+          var mdt = sq + N_OFF[mi];
+          if (!onBoard(mdt)) continue;
+          var mq = b[mdt];
+          if (mq && ((mq > 0) === w)) continue;
+          mn++;
+        }
+        mob += w ? mn : -mn;
       } else if (at === 3) {
         var s3 = th[2] + th[133 + idx];
         if (w) { mg += s3; eg += s3; wB++; } else { mg -= s3; eg -= s3; bB++; }
         phase += 1;
+        var mb = 0;
+        for (var mdi = 0; mdi < 4; mdi++) {
+          var mdd = B_DIR[mdi], mtt = sq + mdd;
+          while (onBoard(mtt)) {
+            var mcq = b[mtt];
+            if (mcq) { if (((mcq > 0) !== w)) mb++; break; }
+            mb++;
+            mtt += mdd;
+          }
+        }
+        mob += w ? mb : -mb;
       } else if (at === 4) {
         var s4 = th[3] + th[197 + idx];
         if (w) { mg += s4; eg += s4; } else { mg -= s4; eg -= s4; }
         phase += 2;
+        var mr = 0;
+        for (var mri = 0; mri < 4; mri++) {
+          var mrd = R_DIR[mri], mrt = sq + mrd;
+          while (onBoard(mrt)) {
+            var mrq = b[mrt];
+            if (mrq) { if (((mrq > 0) !== w)) mr++; break; }
+            mr++;
+            mrt += mrd;
+          }
+        }
+        mob += w ? mr : -mr;
       } else if (at === 5) {
         var s5 = th[4] + th[261 + idx];
         if (w) { mg += s5; eg += s5; } else { mg -= s5; eg -= s5; }
         phase += 4;
+        var mqq = 0;
+        for (var mqi = 0; mqi < 8; mqi++) {
+          var mqd = K_OFF[mqi], mqt = sq + mqd;
+          while (onBoard(mqt)) {
+            var mqc = b[mqt];
+            if (mqc) { if (((mqc > 0) !== w)) mqq++; break; }
+            mqq++;
+            mqt += mqd;
+          }
+        }
+        mob += w ? mqq : -mqq;
       } else {
         var smg = th[325 + idx], seg = th[389 + idx];
         if (w) { mg += smg; eg += seg; } else { mg -= smg; eg -= seg; }
