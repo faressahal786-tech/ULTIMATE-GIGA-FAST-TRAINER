@@ -190,14 +190,14 @@ function makeEngine() {
           var home = us === WHITE ? 4 : 116;
           if (sq === home) {
             if (us === WHITE) {
-              if ((pos.castling & 1) && !b[5] && !b[6] && b[7] === 4 && !attacked(pos, 4, them) && !attacked(pos, 5, them))
+              if ((pos.castling & 1) && !b[5] && !b[6] && b[7] === 4 && !attacked(pos, 4, them) && !attacked(pos, 5, them) && !attacked(pos, 6, them))
                 out.push(encMove(4, 6, 6, 0, 0, F_CASTLE));
-              if ((pos.castling & 2) && !b[3] && !b[2] && !b[1] && b[0] === 4 && !attacked(pos, 4, them) && !attacked(pos, 3, them))
+              if ((pos.castling & 2) && !b[3] && !b[2] && !b[1] && b[0] === 4 && !attacked(pos, 4, them) && !attacked(pos, 3, them) && !attacked(pos, 2, them))
                 out.push(encMove(4, 2, 6, 0, 0, F_CASTLE));
             } else {
-              if ((pos.castling & 4) && !b[117] && !b[118] && b[119] === -4 && !attacked(pos, 116, them) && !attacked(pos, 117, them))
+              if ((pos.castling & 4) && !b[117] && !b[118] && b[119] === -4 && !attacked(pos, 116, them) && !attacked(pos, 117, them) && !attacked(pos, 118, them))
                 out.push(encMove(116, 118, -6, 0, 0, F_CASTLE));
-              if ((pos.castling & 8) && !b[115] && !b[114] && !b[113] && b[112] === -4 && !attacked(pos, 116, them) && !attacked(pos, 115, them))
+              if ((pos.castling & 8) && !b[115] && !b[114] && !b[113] && b[112] === -4 && !attacked(pos, 116, them) && !attacked(pos, 115, them) && !attacked(pos, 114, them))
                 out.push(encMove(116, 114, -6, 0, 0, F_CASTLE));
             }
           }
