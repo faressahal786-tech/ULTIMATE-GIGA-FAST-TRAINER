@@ -85,7 +85,7 @@ function makeTrainer(engine) {
     var depth = opts.depth || 2, maxPlies = opts.maxPlies || 120;
     var openPlies = opts.openPlies != null ? opts.openPlies : 6;
     var rng = opts.rng || mulberry32(1234);
-    var pos = engine.startPos();
+    var pos = opts.startFen ? engine.setFen(engine.newPos(), opts.startFen) : engine.startPos();
     var seen = {}, rep = 0;
     var plies = 0;
     var line = BOOK[(rng() * BOOK.length) | 0];
@@ -264,8 +264,9 @@ function makeTrainer(engine) {
     var base = Array.from(engine.defaultTheta());
     var out = [];
     for (var g = 0; g < nGames; g++) {
-      var res = playGame(base, base, { depth: depth || 1, maxPlies: 100, openPlies: 8, rng: rng });
-      // record final result applied to a few quiet sample positions from a fresh random walk
+      // Sample a random opening position first, then play the game out from
+      // there so the recorded result belongs to the stored fen (labeling an
+      // independent walk with an unrelated startpos result is pure noise).
       var p2 = engine.startPos();
       var seq = 6 + ((rng() * 10) | 0);
       for (var i = 0; i < seq; i++) {
@@ -273,8 +274,10 @@ function makeTrainer(engine) {
         if (!lm.length) break;
         engine.doMove(p2, lm[(rng() * lm.length) | 0]);
       }
+      var fen = engine.getFen(p2);
+      var res = playGame(base, base, { depth: depth || 1, maxPlies: 100, openPlies: 0, rng: rng, startFen: fen });
       var r = res.result === "d" ? 0.5 : res.result === "w" ? 1 : 0;
-      out.push({ fen: engine.getFen(p2), result: r });
+      out.push({ fen: fen, result: r });
     }
     return out;
   }
