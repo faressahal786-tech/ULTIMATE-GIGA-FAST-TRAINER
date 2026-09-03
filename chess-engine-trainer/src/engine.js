@@ -464,12 +464,15 @@ function makeEngine() {
   var evalCacheOn = false;
   var killers = new Int32Array(256);
   var history = new Int32Array(16 * 128);
+  var orderScores = new Int32Array(256);
   var PIECE_W = [0, 100, 320, 330, 500, 900, 20000];
 
   function seeVal(p) { var a = p > 0 ? p : -p; return a <= 6 ? PIECE_W[a] : 0; }
 
   function orderMoves(ms, ttMove, ply) {
-    var n = ms.length, scores = new Array(n);
+    var n = ms.length;
+    if (n > orderScores.length) orderScores = new Int32Array(n);
+    var scores = orderScores;
     for (var i = 0; i < n; i++) {
       var m = ms[i];
       if (m === ttMove) { scores[i] = 3000000; continue; }
