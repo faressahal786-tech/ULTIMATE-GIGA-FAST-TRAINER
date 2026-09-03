@@ -504,6 +504,7 @@ function makeEngine() {
   function think(pos, th, opts) {
     opts = opts || {};
     var maxDepth = opts.depth || 3, timeMs = opts.timeMs || 0;
+    var maxNodes = opts.maxNodes || opts.nodes || 0;
     var deadline = timeMs > 0 ? Date.now() + timeMs : Infinity;
     var nodes = 0, aborted = false;
     TT_GEN++;
@@ -517,6 +518,7 @@ function makeEngine() {
 
     function qs(alpha, beta, ply) {
       nodes++;
+      if (maxNodes > 0 && nodes >= maxNodes) { aborted = true; return alpha; }
       if ((nodes & 1023) === 0 && Date.now() > deadline) { aborted = true; return alpha; }
       var stand = evaluate(pos, th);
       if (stand >= beta) return stand;
@@ -542,6 +544,7 @@ function makeEngine() {
 
     function negamax(depth, alpha, beta, ply) {
       nodes++;
+      if (maxNodes > 0 && nodes >= maxNodes) { aborted = true; return alpha; }
       if ((nodes & 1023) === 0 && Date.now() > deadline) { aborted = true; return alpha; }
       if (pos.half >= 100) return 0;
       var us = pos.turn, chk = inCheck(pos, us);
@@ -632,6 +635,7 @@ function makeEngine() {
 
     // iterative deepening with root PVS: full window first move, null-window + re-search rest
     var prev = root.map(function (m) { return { m: m, s: 0 }; });
+    var lastBest = 0, stable = 0;
     for (var d = 1; d <= maxDepth; d++) {
       prev.sort(function (a, b) { return b.s - a.s; });
       var scored = [], alpha = -INF, lb = null, lv = -INF, first = true;
@@ -656,9 +660,16 @@ function makeEngine() {
         if (val > alpha) alpha = val;
       }
       if (aborted) break;
-      if (lb !== null) { best = lb; bestScore = lv; done = d; prev = scored; }
+      if (lb !== null) {
+        stable = (lb === lastBest) ? stable + 1 : 0;
+        lastBest = lb;
+        best = lb; bestScore = lv; done = d; prev = scored;
+      }
       if (Math.abs(bestScore) > MATE - 200) break;
+      if (maxNodes > 0 && nodes >= maxNodes) break;
       if (Date.now() > deadline) break;
+      // time-managed only: same best two depths in a row past depth 2 -> stop
+      if ((timeMs > 0 || maxNodes > 0) && d >= 3 && stable >= 1) break;
     }
     evalCacheOn = false;
     return { move: best, score: bestScore, depth: done, nodes: nodes, ms: Date.now() - t0 };
