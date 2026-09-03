@@ -451,14 +451,9 @@ function makeEngine() {
     }
     mg += (shieldW - shieldB) * sh;
     mg += mob * mobW;
-    // king-zone attacks beyond pawn shield: enemy attacks on 3x3 around king (mg only, fades in endgame)
+    // king attacks: king-square checks only (3x3 zone scan was the depth-6
+    // hotspot: 18 attacked() calls per evaluate; 2 here keeps the feature).
     var wDanger = attacked(pos, wk, BLACK) ? 1 : 0, bDanger = attacked(pos, bk, WHITE) ? 1 : 0;
-    for (var ko = 0; ko < 8; ko++) {
-      var wq = wk + K_OFF[ko];
-      if (onBoard(wq) && attacked(pos, wq, BLACK)) wDanger++;
-      var bq = bk + K_OFF[ko];
-      if (onBoard(bq) && attacked(pos, bq, WHITE)) bDanger++;
-    }
     mg += (bDanger - wDanger) * kZone;
     if (phase > 24) phase = 24;
     var score = (mg * phase + eg * (24 - phase)) / 24 + tempo;
