@@ -14,6 +14,12 @@ import re
 import sys
 from pathlib import Path
 
+try:
+    # Windows consoles default to cp1252, which chokes on arrows etc. in state text.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 STATE = Path(__file__).with_name(".selfloop.md")
 BACKLOG_H = "## Backlog"
 RUNLOG_H = "## Run log"
