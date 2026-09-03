@@ -129,6 +129,56 @@ function makeTrainer(engine) {
     return { k: k, score: score, games: games, w: w, l: l, d: d, eloPlus: elo, ak: ak, ck: ck, avgPlies: Math.round(pliesSum / Math.max(1, games)) };
   }
 
+  // Parallel SPSA iteration: same perturb/update math as spsaIter, but the
+  // games run on a worker-thread pool. Per-game RNG seeds are drawn upfront
+  // from the main rng so the stream stays deterministic for a given seed.
+  // Falls back to the sequential loop when pool is null (threads <= 1).
+  function spsaIterParallel(brain, opts, pool) {
+    opts = opts || {};
+    if (!pool || typeof pool.runGames !== "function") return Promise.resolve(spsaIter(brain, opts));
+    var rng = opts.rng || mulberry32((Math.random() * 4294967295) >>> 0);
+    var k = (opts.k != null ? opts.k : brain.gen + 1);
+    var games = opts.gamesPerIter || 16;
+    var depth = opts.depth || 2;
+    var maxPlies = opts.maxPlies || 120;
+    var openPlies = opts.openPlies != null ? opts.openPlies : 6;
+    var A = opts.A != null ? opts.A : 40, alpha = 0.602, gamma = 0.101;
+    var a0 = opts.a0 != null ? opts.a0 : 2.5, c0 = opts.c0 != null ? opts.c0 : 9;
+    var ak = a0 / Math.pow(A + k, alpha), ck = c0 / Math.pow(k, gamma);
+    var n = engine.N_PARAMS;
+    var delta = new Int8Array(n);
+    for (var i = 0; i < n; i++) delta[i] = rng() < 0.5 ? -1 : 1;
+    var thPlus = brain.theta.slice(), thMinus = brain.theta.slice();
+    for (var j = 0; j < n; j++) { thPlus[j] += ck * delta[j]; thMinus[j] -= ck * delta[j]; }
+    clipTheta(thPlus); clipTheta(thMinus);
+    var jobs = new Array(games);
+    for (var g = 0; g < games; g++) {
+      jobs[g] = {
+        thPlus: thPlus, thMinus: thMinus, plusWhite: g % 2 === 0,
+        depth: depth, maxPlies: maxPlies, openPlies: openPlies,
+        seed: (rng() * 4294967296) >>> 0
+      };
+    }
+    return pool.runGames(jobs).then(function (results) {
+      var score = 0, w = 0, l = 0, d = 0, pliesSum = 0;
+      for (var q = 0; q < results.length; q++) {
+        var ps = results[q].plusScore;
+        score += ps; pliesSum += results[q].plies;
+        if (ps === 1) { w++; } else if (ps === 0) { l++; } else { d++; }
+      }
+      var grad = (score / games - 0.5) * 2;
+      var scale = ak * grad / (2 * ck);
+      for (var u = 0; u < n; u++) brain.theta[u] += scale * delta[u];
+      clipTheta(brain.theta);
+      brain.gen++; brain.games += games;
+      brain.w += w; brain.l += l; brain.d += d;
+      var elo = 0;
+      var s = score / games;
+      if (s > 0.001 && s < 0.999) elo = -400 * Math.log10(1 / s - 1);
+      return { k: k, score: score, games: games, w: w, l: l, d: d, eloPlus: elo, ak: ak, ck: ck, avgPlies: Math.round(pliesSum / Math.max(1, games)) };
+    });
+  }
+
   // Texel-style supervised tune on [{fen, result}] result in {1,0.5,0} from white perspective.
   function texelTune(thetaIn, dataset, opts) {
     opts = opts || {};
@@ -218,7 +268,7 @@ function makeTrainer(engine) {
     return b;
   }
 
-  return { mulberry32: mulberry32, randn: randn, newBrain: newBrain, cloneTheta: cloneTheta, clipTheta: clipTheta, playGame: playGame, spsaIter: spsaIter, texelTune: texelTune, buildDataset: buildDataset, eloDiff: eloDiff, sprtLLR: sprtLLR, saveBrain: saveBrain, loadBrain: loadBrain };
+  return { mulberry32: mulberry32, randn: randn, newBrain: newBrain, cloneTheta: cloneTheta, clipTheta: clipTheta, playGame: playGame, spsaIter: spsaIter, spsaIterParallel: spsaIterParallel, texelTune: texelTune, buildDataset: buildDataset, eloDiff: eloDiff, sprtLLR: sprtLLR, saveBrain: saveBrain, loadBrain: loadBrain };
 }
 
 if (typeof module !== "undefined" && module.exports) module.exports = { makeTrainer: makeTrainer };

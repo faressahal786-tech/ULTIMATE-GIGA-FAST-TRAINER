@@ -19,6 +19,7 @@ const gamesPerIter = parseInt(arg("games", "16"), 10);
 const outPath = path.resolve(__dirname, arg("out", "brains/brain-v2.json"));
 const seed = parseInt(arg("seed", String((Math.random() * 0xffffffff) >>> 0)), 10);
 const texelGames = parseInt(arg("texel", "0"), 10);
+const threads = parseInt(arg("threads", "1"), 10);
 
 if (!fs.existsSync(path.dirname(outPath))) fs.mkdirSync(path.dirname(outPath), { recursive: true });
 
@@ -45,22 +46,35 @@ function save() {
 }
 
 const deadline = Date.now() + minutes * 60000;
-console.log(`fresh SPSA training: ${minutes} min - depth ${depth} - ${gamesPerIter} games/iter - seed ${seed}`);
+console.log(`fresh SPSA training: ${minutes} min - depth ${depth} - ${gamesPerIter} games/iter - seed ${seed} - threads ${threads}`);
 console.log("Ctrl+C stops early (brain saved every iteration)");
 
 let stop = false;
 process.on("SIGINT", () => { console.log("\nstopping..."); stop = true; });
 
-const t0 = Date.now();
-let iter = 0;
-while (!stop && Date.now() < deadline) {
-  iter++;
-  const r = trainer.spsaIter(brain, { rng, k: brain.gen + 1, gamesPerIter, depth, maxPlies: 120, openPlies: 6 });
+async function main() {
+  let pool = null;
+  if (threads > 1) {
+    const { makePool } = require(path.join(__dirname, "src", "pool.js"));
+    pool = makePool(threads);
+    if (!pool) console.log("worker_threads unavailable - falling back to single thread");
+    else console.log(`worker pool: ${pool.size} threads`);
+  }
+  const t0 = Date.now();
+  let iter = 0;
+  while (!stop && Date.now() < deadline) {
+    iter++;
+    const sopts = { rng, k: brain.gen + 1, gamesPerIter, depth, maxPlies: 120, openPlies: 6 };
+    const r = pool ? await trainer.spsaIterParallel(brain, sopts, pool) : trainer.spsaIter(brain, sopts);
+    save();
+    const el = Date.now() - t0;
+    const rate = (brain.games / Math.max(0.01, el / 60000)).toFixed(1);
+    console.log(`iter ${iter} (k=${r.k}) score ${r.score}/${r.games} W${r.w} L${r.l} D${r.d} eloPlus ${r.eloPlus.toFixed(1)} avgPlies ${r.avgPlies} - total ${brain.games} games ${rate}/min`);
+  }
+  if (pool) await pool.close();
   save();
-  const el = Date.now() - t0;
-  const rate = (brain.games / Math.max(0.01, el / 60000)).toFixed(1);
-  console.log(`iter ${iter} (k=${r.k}) score ${r.score}/${r.games} W${r.w} L${r.l} D${r.d} eloPlus ${r.eloPlus.toFixed(1)} avgPlies ${r.avgPlies} - total ${brain.games} games ${rate}/min`);
+  console.log(`done: gen ${brain.gen} - ${brain.games} games - saved to ${outPath}`);
+  process.exit(0);
 }
-save();
-console.log(`done: gen ${brain.gen} - ${brain.games} games - saved to ${outPath}`);
-process.exit(0);
+
+main().catch((e) => { console.error(e && e.stack || e); process.exit(1); });
