@@ -407,7 +407,7 @@ function makeEngine() {
         if (w) { mg += smg; eg += seg; } else { mg -= smg; eg -= seg; }
       }
     }
-    var bp = th[453], dbl = th[454], iso = th[455], pass = th[456], rO = th[457], rH = th[458], sh = th[459], tempo = th[460], mobW = th[461];
+    var bp = th[453], dbl = th[454], iso = th[455], pass = th[456], rO = th[457], rH = th[458], sh = th[459], tempo = th[460], mobW = th[461], kZone = th[462];
     if (wB >= 2) { mg += bp; eg += bp; }
     if (bB >= 2) { mg -= bp; eg -= bp; }
     for (var f = 0; f < 8; f++) {
@@ -451,6 +451,15 @@ function makeEngine() {
     }
     mg += (shieldW - shieldB) * sh;
     mg += mob * mobW;
+    // king-zone attacks beyond pawn shield: enemy attacks on 3x3 around king (mg only, fades in endgame)
+    var wDanger = attacked(pos, wk, BLACK) ? 1 : 0, bDanger = attacked(pos, bk, WHITE) ? 1 : 0;
+    for (var ko = 0; ko < 8; ko++) {
+      var wq = wk + K_OFF[ko];
+      if (onBoard(wq) && attacked(pos, wq, BLACK)) wDanger++;
+      var bq = bk + K_OFF[ko];
+      if (onBoard(bq) && attacked(pos, bq, WHITE)) bDanger++;
+    }
+    mg += (bDanger - wDanger) * kZone;
     if (phase > 24) phase = 24;
     var score = (mg * phase + eg * (24 - phase)) / 24 + tempo;
     return pos.turn === WHITE ? score : -score;
