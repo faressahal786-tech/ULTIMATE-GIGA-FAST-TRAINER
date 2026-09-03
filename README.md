@@ -1,25 +1,20 @@
-# Chess Self-Play Trainer
+# ULTIMATE GIGA FAST TRAINER
 
-Self-play chess trainer that evolves by playing against itself — with a browser GUI where you can play the evolved engine.
-
-Burned brain at `chess-trainer/brains/brain.json` (auto-created). Current bundle ships a gen-38 champion (704 games).
+Fast Stockfish-style chess engine trainer: SPSA + Texel tuning, stronger search, parallel self-play. Zero deps. Bun or Node.
 
 ## Quick start
 
 ```powershell
-cd chess-trainer
-bun install    # no deps, just validates
-bun run-tests.js   # 53/53 should pass
-bun serve.js       # http://localhost:8123
-# or: bun train.js --minutes 30 --threads 0   # 0 = all cores
+cd chess-engine-trainer
+bun test.js        # perft + search + trainer checks
+bun bench.js       # nps + mate tests + games/min probe
+bun train.js --minutes 5 --depth 2 --games 16 --threads 0   # 0 = all cores
 ```
 
-Alternative: double-click `chess-trainer/index.html` (single-threaded fallback).
+Brains save to `chess-engine-trainer/brains/brain-v2.json`. Ctrl+C stops early — every iteration is saved.
 
 ## How it works
 
-1. **Engine** — 0x88 board, alpha-beta + quiescence + transposition table + null-move pruning, tapered PST + pawn-structure + bishop-pair + rook-open + king-shield eval. Every number in the eval is learnable.
-2. **Trainer** — evolution loop: champion → Gaussian-mutated challenger → parallel games across all cores via Workers. Challenger promoted only if >50% score.
-3. **GUI** — Play vs engine with undo/flip/hint, Train tab (live SSE), Brain tab (heatmaps, export/import/reset, self-test).
-
-Performance: **1.3M nps** single-thread, **~1,380 games/min** on 16 threads (7.3× vs single-thread).
+1. **Engine** (`src/engine.js`) — 0x88 board, alpha-beta + quiescence + transposition table + null-move + LMR + futility + root PVS, tapered eval (material + PSTs + mobility + king safety). All 463 eval numbers are learnable.
+2. **Trainer** (`src/trainer.js`) — SPSA self-play tuning (Stockfish-style schedule), Texel-style warmup, SPRT/Elo helpers, worker-thread pool.
+3. **Looper** (lives outside the repo) — `selfloop.py` prints the next improvement prompt, `autoloop.ps1` feeds prompts to the agent round after round, one commit per change.
