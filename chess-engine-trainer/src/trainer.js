@@ -98,7 +98,7 @@ function makeTrainer(engine) {
       }
       if (insufficient(pos)) return { result: "d", plies: plies, reason: "material" };
       if (pos.half >= 100) return { result: "d", plies: plies, reason: "fifty" };
-      var key = engine.getFen(pos).split(" ").slice(0, 3).join(" ");
+      var key = pos.h;
       seen[key] = (seen[key] || 0) + 1;
       if (seen[key] >= 3) return { result: "d", plies: plies, reason: "repetition" };
       if (plies >= maxPlies) {
